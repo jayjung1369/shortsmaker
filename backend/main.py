@@ -4,6 +4,8 @@ import subprocess
 import re
 import os
 import shutil
+import tempfile
+import zipfile
 import threading
 import time
 from uuid import uuid4
@@ -16,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 BASE = Path(__file__).resolve().parent.parent
 STORAGE = BASE / "storage"
@@ -35,6 +38,7 @@ SOCIAL_QUERY_VARIANTS_MAX = 2
 SOCIAL_HTTP_TIMEOUT_SEC = 4
 SOCIAL_PROXY_TIMEOUT_SEC = 5
 SOCIAL_ENABLE_SLOW_FALLBACK = os.environ.get("SOCIAL_ENABLE_SLOW_FALLBACK", "0") == "1"
+STRICT_NO_SERVER_PERSIST = os.environ.get("STRICT_NO_SERVER_PERSIST", "1") == "1"
 
 for p in (VIDEOS, AUDIO, SUBTITLES, THUMBNAILS, DATA):
     p.mkdir(parents=True, exist_ok=True)
@@ -46,6 +50,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173", "http://127.0.0.1:5173",
         "http://localhost:5174", "http://127.0.0.1:5174",
+        "https://jayjung1369-gif.github.io",
     ],
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
 )
@@ -59,7 +64,31 @@ def history_read():
         return []
 
 def history_write(items):
-    HISTORY.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Privacy mode: do not persist user activity server-side.
+    return
+
+
+def _cleanup_path(path: Path):
+    try:
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+        elif path.exists():
+            path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _mk_temp_dir(prefix: str) -> Path:
+    return Path(tempfile.mkdtemp(prefix=prefix))
+
+
+def _file_download_response(file_path: Path, cleanup_root: Path):
+    encoded = quote(file_path.name, safe='')
+    return FileResponse(
+        file_path,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+        background=BackgroundTask(_cleanup_path, cleanup_root),
+    )
 
 def n(v):
     try:
@@ -1240,6 +1269,9 @@ def account_status(platform: str = Query(..., pattern="^(instagram|xiaohongshu)$
 
 @app.post("/api/account/connect")
 def account_connect(platform: str = Query(..., pattern="^(instagram|xiaohongshu)$")):
+    if STRICT_NO_SERVER_PERSIST:
+        raise HTTPException(403, "개인정보 모드에서는 서버에 로그인 세션을 저장할 수 없습니다.")
+
     existing = OPEN_CONNECTORS.get(platform)
     if existing and existing.is_alive():
         return {
@@ -1294,6 +1326,9 @@ async def translate_video(
     quality: str = Form("balanced"),
     mode: str = Form("transcribe"),
 ):
+    if STRICT_NO_SERVER_PERSIST:
+        raise HTTPException(403, "개인정보 모드에서는 업로드/번역 파일을 서버에 저장하지 않습니다.")
+
     ext = Path(video.filename or "video.mp4").suffix.lower() or ".mp4"
     if ext not in {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}:
         raise HTTPException(400, "지원되지 않는 영상 형식입니다. mp4/mov/mkv/webm/m4v/avi 파일을 업로드하세요.")
@@ -1364,6 +1399,9 @@ def translate_video_status(job_id: str):
 
 @app.post("/api/translate-video/render-subtitles")
 def render_subtitles(req: SubtitleRenderRequest):
+    if STRICT_NO_SERVER_PERSIST:
+        raise HTTPException(403, "개인정보 모드에서는 서버 재렌더링을 지원하지 않습니다.")
+
     quality_key = (req.quality or "balanced").lower()
     quality_profile = dict(TRANSLATE_QUALITY_PRESETS.get(quality_key) or {})
     if not quality_profile:
@@ -1681,27 +1719,24 @@ def search_social(
 @app.post("/api/download/{video_id}")
 def download(video_id: str):
     url = f"https://www.youtube.com/watch?v={video_id}"
-    out_dir = VIDEOS / video_id
+    temp_root = _mk_temp_dir("vs_download_")
+    out_dir = temp_root / video_id
     try:
-        info, path = _download_video_with_fallback(url, out_dir)
+        _info, path = _download_video_with_fallback(url, out_dir)
     except Exception as exc:
+        _cleanup_path(temp_root)
         raise HTTPException(502, str(exc))
 
-    h = history_read()
-    h.append({
-        "id": video_id,
-        "title": info.get("title", ""),
-        "platform": "youtube",
-        "url": url,
-        "file": str(path.relative_to(BASE))
-    })
-    history_write(h)
-    return {"ok": True, "file": str(path.relative_to(BASE))}
+    if not path.exists():
+        _cleanup_path(temp_root)
+        raise HTTPException(500, "다운로드 파일을 찾을 수 없습니다.")
+    return _file_download_response(path, temp_root)
 
 @app.post("/api/subtitles/{video_id}")
 def subtitles(video_id: str):
     """Download subtitles/captions if YouTube exposes them."""
-    out_dir = SUBTITLES / video_id
+    temp_root = _mk_temp_dir("vs_subtitles_")
+    out_dir = temp_root / video_id
     out_dir.mkdir(parents=True, exist_ok=True)
     url = f"https://www.youtube.com/watch?v={video_id}"
     opts = {
@@ -1717,30 +1752,37 @@ def subtitles(video_id: str):
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            ydl.extract_info(url, download=True)
     except Exception as exc:
+        _cleanup_path(temp_root)
         raise HTTPException(502, str(exc))
 
     files = sorted(out_dir.glob("*"))
     if not files:
+        _cleanup_path(temp_root)
         raise HTTPException(404, "No subtitles/captions are available for this video.")
-    return {
-        "ok": True,
-        "files": [f"/api/files/subtitle/{f.name}" for f in files],
-        "names": [f.name for f in files],
-    }
+
+    if len(files) == 1:
+        return _file_download_response(files[0], temp_root)
+
+    zip_path = temp_root / f"{video_id}_subtitles.zip"
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            if f.is_file():
+                zf.write(f, arcname=f.name)
+    return _file_download_response(zip_path, temp_root)
 
 @app.post("/api/audio/{video_id}")
 def audio(video_id: str):
-    files = list((VIDEOS / video_id).glob("*"))
-    video = next(
-        (p for p in files if p.suffix.lower() in {".mp4",".mkv",".webm",".mov"}),
-        None
-    )
-    if not video:
-        raise HTTPException(404, "Download the video first.")
+    temp_root = _mk_temp_dir("vs_audio_")
+    source_dir = temp_root / video_id
+    try:
+        _info, video = _download_video_with_fallback(f"https://www.youtube.com/watch?v={video_id}", source_dir)
+    except Exception as exc:
+        _cleanup_path(temp_root)
+        raise HTTPException(502, str(exc))
 
-    out = AUDIO / f"{video.stem[:180]}.mp3"
+    out = temp_root / f"{video.stem[:180]}.mp3"
     cmd = [
         "ffmpeg", "-y", "-i", str(video),
         "-vn", "-codec:a", "libmp3lame", "-q:a", "2", str(out)
@@ -1748,14 +1790,49 @@ def audio(video_id: str):
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
     except FileNotFoundError:
+        _cleanup_path(temp_root)
         raise HTTPException(500, "FFmpeg is not installed or not in PATH.")
     except subprocess.CalledProcessError as exc:
+        _cleanup_path(temp_root)
         raise HTTPException(500, exc.stderr[-2000:])
-    return {"ok": True, "file": f"/api/files/audio/{out.name}"}
+    if not out.exists():
+        _cleanup_path(temp_root)
+        raise HTTPException(500, "오디오 파일 생성에 실패했습니다.")
+    return _file_download_response(out, temp_root)
+
+
+@app.post("/api/audio-url")
+def audio_from_url(req: UrlRequest):
+    temp_root = _mk_temp_dir("vs_audio_url_")
+    source_dir = temp_root / "source"
+    try:
+        _info, video = _download_video_with_fallback(req.url, source_dir)
+    except Exception as exc:
+        _cleanup_path(temp_root)
+        raise HTTPException(502, str(exc))
+
+    out = temp_root / f"{video.stem[:180]}.mp3"
+    cmd = [
+        "ffmpeg", "-y", "-i", str(video),
+        "-vn", "-codec:a", "libmp3lame", "-q:a", "2", str(out)
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except FileNotFoundError:
+        _cleanup_path(temp_root)
+        raise HTTPException(500, "FFmpeg is not installed or not in PATH.")
+    except subprocess.CalledProcessError as exc:
+        _cleanup_path(temp_root)
+        raise HTTPException(500, exc.stderr[-2000:])
+
+    if not out.exists():
+        _cleanup_path(temp_root)
+        raise HTTPException(500, "오디오 파일 생성에 실패했습니다.")
+    return _file_download_response(out, temp_root)
 
 @app.get("/api/history")
 def history():
-    return {"items": history_read()}
+    return {"items": []}
 
 @app.get("/api/files/{kind}/{filename}")
 def file(kind: str, filename: str):
@@ -1804,29 +1881,18 @@ def get_info(url: str = Query(...)):
 @app.post("/api/download-url")
 def download_from_url(req: UrlRequest):
     """Download video from any URL (Instagram, Xiaohongshu, etc.)."""
+    temp_root = _mk_temp_dir("vs_download_url_")
+    out_dir = temp_root / "video"
     try:
-        with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True, "noplaylist": True}) as ydl:
-            info_pre = ydl.extract_info(req.url, download=False)
+        _info, path = _download_video_with_fallback(req.url, out_dir)
     except Exception as exc:
+        _cleanup_path(temp_root)
         raise HTTPException(502, str(exc))
 
-    video_id = (info_pre or {}).get("id") or "unknown"
-    out_dir = VIDEOS / video_id
-    try:
-        info, path = _download_video_with_fallback(req.url, out_dir)
-    except Exception as exc:
-        raise HTTPException(502, str(exc))
-
-    h = history_read()
-    h.append({
-        "id": video_id,
-        "title": info.get("title", ""),
-        "platform": detect_platform(req.url),
-        "url": req.url,
-        "file": str(path.relative_to(BASE)),
-    })
-    history_write(h)
-    return {"ok": True, "file": str(path.relative_to(BASE)), "video_id": video_id}
+    if not path.exists():
+        _cleanup_path(temp_root)
+        raise HTTPException(500, "다운로드 파일을 찾을 수 없습니다.")
+    return _file_download_response(path, temp_root)
 
 
 @app.post("/api/subtitles-url")
@@ -1839,7 +1905,8 @@ def subtitles_from_url(req: UrlRequest):
         raise HTTPException(502, str(exc))
 
     video_id = (info_pre or {}).get("id") or "unknown"
-    out_dir = SUBTITLES / video_id
+    temp_root = _mk_temp_dir("vs_subtitles_url_")
+    out_dir = temp_root / video_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     opts = {
@@ -1857,13 +1924,20 @@ def subtitles_from_url(req: UrlRequest):
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.extract_info(req.url, download=True)
     except Exception as exc:
+        _cleanup_path(temp_root)
         raise HTTPException(502, str(exc))
 
     files = sorted(out_dir.glob("*"))
     if not files:
+        _cleanup_path(temp_root)
         raise HTTPException(404, "이 영상에는 자막/캡션이 없습니다.")
-    return {
-        "ok": True,
-        "files": [f"/api/files/subtitle/{f.name}" for f in files],
-        "names": [f.name for f in files],
-    }
+
+    if len(files) == 1:
+        return _file_download_response(files[0], temp_root)
+
+    zip_path = temp_root / f"{video_id}_subtitles.zip"
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            if f.is_file():
+                zf.write(f, arcname=f.name)
+    return _file_download_response(zip_path, temp_root)

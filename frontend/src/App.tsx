@@ -682,6 +682,29 @@ export default function App() {
     document.body.removeChild(a);
   }
 
+  function filenameFromDisposition(disposition: string | null, fallback: string) {
+    if (!disposition) return fallback;
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+      try {
+        return decodeURIComponent(utf8Match[1]);
+      } catch {
+        return utf8Match[1];
+      }
+    }
+    const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+    return plainMatch?.[1] || fallback;
+  }
+
+  async function downloadBinaryResponse(req: Response, fallbackName: string) {
+    const disposition = req.headers.get("content-disposition");
+    const filename = filenameFromDisposition(disposition, fallbackName);
+    const blob = await req.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    triggerDownload(objectUrl, filename);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+  }
+
   function cancelAction() {
     actionAbortRef.current?.abort();
     actionAbortRef.current = null;
@@ -704,11 +727,12 @@ export default function App() {
         body: isYoutubeItem(item) ? undefined : JSON.stringify({ url: item.url }),
         signal: ctrl.signal,
       });
-      const data = await req.json();
-      if (!req.ok) throw new Error(data.detail || "다운로드 실패");
+      if (!req.ok) {
+        const data = await req.json().catch(() => ({}));
+        throw new Error(data.detail || "다운로드 실패");
+      }
 
-      const filename = (data.file as string).split(/[\\/]/).pop() || "video.mp4";
-      triggerDownload(apiUrl(`/api/files/video/${filename}`), filename);
+      await downloadBinaryResponse(req, `${item.id}.mp4`);
       setMessage("영상 저장 완료 - 다운로드 폴더를 확인하세요.");
     } catch (e: any) {
       if (e.name !== "AbortError") setMessage(e.message);
@@ -732,13 +756,13 @@ export default function App() {
         body: isYoutubeItem(item) ? undefined : JSON.stringify({ url: item.url }),
         signal: ctrl.signal,
       });
-      const data = await req.json();
-      if (!req.ok) throw new Error(data.detail || "자막이 없습니다.");
+      if (!req.ok) {
+        const data = await req.json().catch(() => ({}));
+        throw new Error(data.detail || "자막이 없습니다.");
+      }
 
-      (data.names as string[]).forEach((name: string) => {
-        triggerDownload(apiUrl(`/api/files/subtitle/${name}`), name);
-      });
-      setMessage(`자막 저장 완료 (${data.names.length}개) - 다운로드 폴더를 확인하세요.`);
+      await downloadBinaryResponse(req, `${item.id}_subtitles.zip`);
+      setMessage("자막 저장 완료 - 다운로드 폴더를 확인하세요.");
     } catch (e: any) {
       if (e.name !== "AbortError") setMessage(e.message);
     } finally {
@@ -754,24 +778,20 @@ export default function App() {
     setMessage("MP3 추출 중...");
 
     try {
-      if (!isYoutubeItem(item)) {
-        const preloadReq = await fetch(apiUrl("/api/download-url"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: item.url }),
-          signal: ctrl.signal,
-        });
-        const preloadData = await preloadReq.json();
-        if (!preloadReq.ok) throw new Error(preloadData.detail || "영상 다운로드 실패");
-        item = { ...item, id: preloadData.video_id || item.id, platform: "youtube" };
+      const req = isYoutubeItem(item)
+        ? await fetch(apiUrl(`/api/audio/${item.id}`), { method: "POST", signal: ctrl.signal })
+        : await fetch(apiUrl("/api/audio-url"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: item.url }),
+            signal: ctrl.signal,
+          });
+      if (!req.ok) {
+        const data = await req.json().catch(() => ({}));
+        throw new Error(data.detail || "오디오 추출 실패");
       }
 
-      const req = await fetch(apiUrl(`/api/audio/${item.id}`), { method: "POST", signal: ctrl.signal });
-      const data = await req.json();
-      if (!req.ok) throw new Error(data.detail || "오디오 추출 실패");
-
-      const audioFilename = (data.file as string).split("/").pop() || "audio.mp3";
-      triggerDownload(apiUrl(data.file), audioFilename);
+      await downloadBinaryResponse(req, `${item.id}.mp3`);
       setMessage("MP3 저장 완료 - 다운로드 폴더를 확인하세요.");
     } catch (e: any) {
       if (e.name !== "AbortError") setMessage(e.message);
