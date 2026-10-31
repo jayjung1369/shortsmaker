@@ -1,0 +1,19 @@
+Title: Yandex
+
+URL Source: http://yandex.com/search/?text=site:instagram.com+travel
+
+Warning: This page maybe not yet fully loaded, consider explicitly specify a timeout.
+Warning: This page maybe requiring CAPTCHA, please make sure you are authorized to access this page.
+
+Markdown Content:
+Yandex uses technical cookies to ensure the site/app functions properly. However, we would also like to use optional marketing, analytics, and other types of cookies. These cookies help Yandex improve services, your experience, and ad relevancy. For more information about cookies, please read our [Cookie Policy](https://yandex.com/legal/cookies_policy_eng/)
+
+These cookies are necessary for crucial web browsing functions, such as authorization or navigation. They are essential to the service's functionality, so they are used by default.
+
+These cookies improve the quality of Yandex services. They remember preference settings, anonymously analyze website traffic, and help displaying relevant ads.
+
+These cookies are non-essential. They help to improve the experience of working on Yandex services and websites. They help to restore web page sessions, remember preferred regions, save personal preferences, and more.
+
+Allow selected cookies
+
+Allow essential cookies

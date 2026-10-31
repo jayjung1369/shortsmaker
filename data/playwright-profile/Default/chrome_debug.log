@@ -1,0 +1,13 @@
+[0908/233221.923:INFO:CONSOLE:9] "
+%cStop! font-family:helvetica; font-size:20px; font-size:50px; font-weight:bold; color:red; -webkit-text-stroke:1px black;", source: https://static.cdninstagram.com/rsrc.php/v4ijWG4/yH/l/en_US/euYUQxemn1x.js (9)
+[0908/233221.924:INFO:CONSOLE:9] "
+%cThis is a browser feature intended for developers. If someone told you to copy-paste something here to enable an Instagram feature or "hack" someone's account, it is a scam and will give them access to your Instagram account. font-family:helvetica; font-size:20px; ", source: https://static.cdninstagram.com/rsrc.php/v4ijWG4/yH/l/en_US/euYUQxemn1x.js (9)
+[0908/233221.924:INFO:CONSOLE:9] "
+%cSee https://www.facebook.com/selfxss for more information. font-family:helvetica; font-size:20px; ", source: https://static.cdninstagram.com/rsrc.php/v4ijWG4/yH/l/en_US/euYUQxemn1x.js (9)
+[0908/233221.924:INFO:CONSOLE:9] "
+%c ", source: https://static.cdninstagram.com/rsrc.php/v4ijWG4/yH/l/en_US/euYUQxemn1x.js (9)
+[0908/233222.080:INFO:CONSOLE:84] "ErrorUtils caught an error:
+
+Error connecting to Credential Management service.
+
+Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. [object Object]", source: https://static.cdninstagram.com/rsrc.php/v4/yi/r/yUdSFj7NyHY.js (84)

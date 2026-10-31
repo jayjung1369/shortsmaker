@@ -1,0 +1,12 @@
+backend/.venv/
+frontend/node_modules/
+__pycache__/
+*.pyc
+.env
+storage/*
+data/history.json
+*.mp4
+*.mp3
+*.wav
+*.srt
+*.vtt

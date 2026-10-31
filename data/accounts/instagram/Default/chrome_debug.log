@@ -1,0 +1,14 @@
+[1002/225616.664:INFO:CONSOLE:268] "Rendering was performed in a subtree hidden by content-visibility.", source: https://static.cdninstagram.com/rsrc.php/v4/yP/r/DxF102Dg0Dp.js (268)
+[1002/225617.259:INFO:CONSOLE:85] "ErrorUtils caught an error:
+
+Error connecting to Credential Management service.
+
+Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. [object Object]", source: https://static.cdninstagram.com/rsrc.php/v4/yP/r/DxF102Dg0Dp.js (85)
+[1002/225617.500:INFO:CONSOLE:252] "
+%cStop! font-family:helvetica; font-size:20px; font-size:50px; font-weight:bold; color:red; -webkit-text-stroke:1px black;", source: https://static.cdninstagram.com/rsrc.php/v4/yP/r/DxF102Dg0Dp.js (252)
+[1002/225617.500:INFO:CONSOLE:252] "
+%cThis is a browser feature intended for developers. If someone told you to copy-paste something here to enable an Instagram feature or "hack" someone's account, it is a scam and will give them access to your Instagram account. font-family:helvetica; font-size:20px; ", source: https://static.cdninstagram.com/rsrc.php/v4/yP/r/DxF102Dg0Dp.js (252)
+[1002/225617.501:INFO:CONSOLE:252] "
+%cSee https://www.facebook.com/selfxss for more information. font-family:helvetica; font-size:20px; ", source: https://static.cdninstagram.com/rsrc.php/v4/yP/r/DxF102Dg0Dp.js (252)
+[1002/225617.501:INFO:CONSOLE:252] "
+%c ", source: https://static.cdninstagram.com/rsrc.php/v4/yP/r/DxF102Dg0Dp.js (252)
