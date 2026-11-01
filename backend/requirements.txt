@@ -3,6 +3,5 @@ uvicorn[standard]
 yt-dlp
 python-multipart
 playwright
-openai-whisper
 deep-translator
 google-translate-py
