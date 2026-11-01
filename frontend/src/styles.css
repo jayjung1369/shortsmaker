@@ -207,7 +207,7 @@ button {
   display: grid;
   grid-template-columns: minmax(280px, 2fr) repeat(2, minmax(170px, 1fr)) minmax(200px, 1fr);
   gap: 12px;
-  align-items: end;
+  align-items: start;
 }
 
 .translate-grid > .translate-file {
