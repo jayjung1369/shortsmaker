@@ -205,13 +205,13 @@ button {
 
 .translate-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: minmax(280px, 2fr) repeat(2, minmax(170px, 1fr)) minmax(200px, 1fr);
   gap: 12px;
   align-items: end;
 }
 
 .translate-grid > .translate-file {
-  grid-column: span 2;
+  grid-column: 1 / 2;
 }
 
 .translate-file,
@@ -231,6 +231,7 @@ button {
 .translate-select select {
   width: 100%;
   min-width: 0;
+  min-height: 54px;
   padding: 12px 14px;
   border: 1px solid rgba(102, 74, 48, 0.16);
   border-radius: 14px;
@@ -238,16 +239,34 @@ button {
   color: var(--text);
 }
 
+.translate-file input[type="file"] {
+  padding: 8px;
+}
+
+.translate-file input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(102, 74, 48, 0.24);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .translate-file strong {
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  min-height: 1.2em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .translate-grid > button {
-  min-height: 45px;
+  align-self: end;
+  min-height: 54px;
   padding: 0 18px;
   border-radius: 14px;
   background: var(--accent);
@@ -1082,12 +1101,16 @@ button {
   }
 
   .translate-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
   }
 
   .translate-grid > .translate-file {
-    grid-column: auto;
+    grid-column: span 2;
+  }
+
+  .translate-grid > button {
+    grid-column: span 2;
   }
 
   .subtitle-style-grid {
@@ -1135,6 +1158,15 @@ button {
   .actions,
   .translate-actions {
     grid-template-columns: 1fr;
+  }
+
+  .translate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .translate-grid > .translate-file,
+  .translate-grid > button {
+    grid-column: auto;
   }
 
   .subtitle-style-grid {
