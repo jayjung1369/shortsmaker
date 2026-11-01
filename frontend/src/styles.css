@@ -265,7 +265,8 @@ button {
 }
 
 .translate-grid > button {
-  align-self: end;
+  align-self: start;
+  margin-top: 28px;
   min-height: 54px;
   padding: 0 18px;
   border-radius: 14px;
@@ -1111,6 +1112,7 @@ button {
 
   .translate-grid > button {
     grid-column: span 2;
+    margin-top: 0;
   }
 
   .subtitle-style-grid {
@@ -1167,6 +1169,10 @@ button {
   .translate-grid > .translate-file,
   .translate-grid > button {
     grid-column: auto;
+  }
+
+  .translate-grid > button {
+    margin-top: 0;
   }
 
   .subtitle-style-grid {
