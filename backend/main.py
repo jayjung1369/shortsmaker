@@ -133,14 +133,12 @@ def is_channel_query(q: str) -> bool:
 
 def get_detail(url: str):
     """Full metadata fetch for a single video (used only for direct URL lookup)."""
-    opts = {
-        "quiet": True,
-        "skip_download": True,
-        "ignoreerrors": True,
-        "noplaylist": True,
-        "socket_timeout": 10,
-        "retries": 1,
-    }
+    opts = _yt_dlp_opts(
+        skip_download=True,
+        ignoreerrors=True,
+        socket_timeout=15,
+        retries=2,
+    )
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             return ydl.extract_info(url, download=False)
@@ -158,6 +156,42 @@ def detect_platform(url: str) -> str:
     return "other"
 
 
+def _yt_dlp_opts(**overrides):
+    """Shared yt-dlp defaults tuned for cloud hosts (e.g. Render)."""
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noprogress": True,
+        "noplaylist": True,
+        "windowsfilenames": True,
+        "socket_timeout": 30,
+        "retries": 5,
+        "fragment_retries": 5,
+        "extractor_retries": 3,
+        "force_ipv4": True,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/128.0.0.0 Safari/537.36"
+            )
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web", "ios"],
+            }
+        },
+    }
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(opts.get(key), dict):
+            merged = dict(opts[key])
+            merged.update(value)
+            opts[key] = merged
+        else:
+            opts[key] = value
+    return opts
+
+
 def _download_video_with_fallback(url: str, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
     # Try high quality merge first, then progressive fallback for environments
@@ -169,19 +203,11 @@ def _download_video_with_fallback(url: str, out_dir: Path):
     last_error = None
 
     for fmt in format_candidates:
-        opts = {
-            "outtmpl": str(out_dir / "%(id)s_%(title).160s.%(ext)s"),
-            "format": fmt,
-            "merge_output_format": "mp4",
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-            "noprogress": True,
-            "windowsfilenames": True,
-            "socket_timeout": 20,
-            "retries": 3,
-            "fragment_retries": 3,
-        }
+        opts = _yt_dlp_opts(
+            outtmpl=str(out_dir / "%(id)s_%(title).160s.%(ext)s"),
+            format=fmt,
+            merge_output_format="mp4",
+        )
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -1739,17 +1765,14 @@ def subtitles(video_id: str):
     out_dir = temp_root / video_id
     out_dir.mkdir(parents=True, exist_ok=True)
     url = f"https://www.youtube.com/watch?v={video_id}"
-    opts = {
-        "skip_download": True,
-        "writesubtitles": True,
-        "writeautomaticsub": True,
-        "subtitleslangs": ["ko", "en"],
-        "subtitlesformat": "srt/vtt/best",
-        "outtmpl": str(out_dir / "%(title).180s.%(ext)s"),
-        "noplaylist": True,
-        "quiet": True,
-        "windowsfilenames": True,
-    }
+    opts = _yt_dlp_opts(
+        skip_download=True,
+        writesubtitles=True,
+        writeautomaticsub=True,
+        subtitleslangs=["ko", "en"],
+        subtitlesformat="srt/vtt/best",
+        outtmpl=str(out_dir / "%(title).180s.%(ext)s"),
+    )
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.extract_info(url, download=True)
@@ -1860,12 +1883,10 @@ def file(kind: str, filename: str):
 @app.get("/api/info")
 def get_info(url: str = Query(...)):
     """Fetch video metadata from any supported URL (Instagram, Xiaohongshu, etc.)."""
-    opts = {
-        "quiet": True,
-        "skip_download": True,
-        "ignoreerrors": False,
-        "noplaylist": True,
-    }
+    opts = _yt_dlp_opts(
+        skip_download=True,
+        ignoreerrors=False,
+    )
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -1899,7 +1920,7 @@ def download_from_url(req: UrlRequest):
 def subtitles_from_url(req: UrlRequest):
     """Download subtitles/captions from any supported URL."""
     try:
-        with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True, "noplaylist": True}) as ydl:
+        with yt_dlp.YoutubeDL(_yt_dlp_opts(skip_download=True)) as ydl:
             info_pre = ydl.extract_info(req.url, download=False)
     except Exception as exc:
         raise HTTPException(502, str(exc))
@@ -1909,17 +1930,14 @@ def subtitles_from_url(req: UrlRequest):
     out_dir = temp_root / video_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    opts = {
-        "skip_download": True,
-        "writesubtitles": True,
-        "writeautomaticsub": True,
-        "subtitleslangs": ["ko", "en", "zh", "zh-Hans", "zh-Hant", "zh-TW"],
-        "subtitlesformat": "srt/vtt/best",
-        "outtmpl": str(out_dir / "%(title).180s.%(ext)s"),
-        "noplaylist": True,
-        "quiet": True,
-        "windowsfilenames": True,
-    }
+    opts = _yt_dlp_opts(
+        skip_download=True,
+        writesubtitles=True,
+        writeautomaticsub=True,
+        subtitleslangs=["ko", "en", "zh", "zh-Hans", "zh-Hant", "zh-TW"],
+        subtitlesformat="srt/vtt/best",
+        outtmpl=str(out_dir / "%(title).180s.%(ext)s"),
+    )
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.extract_info(req.url, download=True)
