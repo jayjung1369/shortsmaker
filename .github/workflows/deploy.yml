@@ -34,11 +34,21 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Validate API base URL
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+        run: |
+          if [ -z "$VITE_API_BASE" ]; then
+            echo "Repository variable VITE_API_BASE is not set."
+            echo "Set it to your deployed backend URL (e.g. https://your-api.onrender.com)."
+            exit 1
+          fi
+
       - name: Build
         working-directory: frontend
         env:
           VITE_BASE_PATH: /shortsmaker/
-          VITE_API_BASE: https://shortsmaker-api.onrender.com
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
         run: npm run build
 
       - name: Add .nojekyll
