@@ -45,13 +45,27 @@ for p in (VIDEOS, AUDIO, SUBTITLES, THUMBNAILS, DATA):
 ACCOUNTS.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Video Researcher API")
+
+
+def _allowed_origins() -> list[str]:
+    env_raw = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+    if env_raw.strip():
+        return [o.strip().rstrip("/") for o in env_raw.split(",") if o.strip()]
+
+    # Defaults for local dev and known GitHub Pages hosts.
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "https://jayjung1369.github.io",
+        "https://jayjung1369-gif.github.io",
+    ]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        "http://localhost:5174", "http://127.0.0.1:5174",
-        "https://jayjung1369-gif.github.io",
-    ],
+    allow_origins=_allowed_origins(),
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
 )
 
