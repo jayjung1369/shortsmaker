@@ -63,9 +63,15 @@ def _allowed_origins() -> list[str]:
     ]
 
 
+def _allowed_origin_regex() -> str:
+    # Allow GitHub Pages deployments across accounts/repositories by default.
+    return os.environ.get("CORS_ALLOWED_ORIGIN_REGEX", r"^https://[A-Za-z0-9-]+\.github\.io$")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),
+    allow_origin_regex=_allowed_origin_regex(),
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
 )
 
